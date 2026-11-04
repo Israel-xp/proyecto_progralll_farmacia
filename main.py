@@ -4,30 +4,24 @@ from flask_cors import CORS
 from sqlalchemy import func
 import google.generativeai as genai
 
-# Importamos tu base de datos y modelos intactos
+
 from database import SessionLocal, Medicamento, Lote, Venta, DetalleVenta
 
 app = Flask(__name__)
-# CORS permite que tu index.html se conecte sin bloqueos de seguridad del navegador
+
 CORS(app)
 
-# ==========================================
-# CONFIGURACIÓN DE LA INTELIGENCIA ARTIFICIAL
-# ==========================================
+
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# ==========================================
-# 1. RUTA PRINCIPAL (SIRVE EL HTML AL NAVEGADOR)
-# ==========================================
+
 @app.route("/", methods=["GET"])
 def inicio():
-    # Corregido: apunta a la carpeta frontend_web donde realmente está tu archivo
+   
     ruta_html = os.path.join(os.path.dirname(__file__), "..", "frontend_web", "index.html")
     return send_file(ruta_html)
 
-# ==========================================
-# 2. RUTA DEL ASISTENTE IA (SÍNTOMAS -> RECOMENDACIÓN)
-# ==========================================
+
 @app.route("/api/ia/consultar", methods=["POST"])
 def asistente_ia():
     try:
@@ -37,7 +31,7 @@ def asistente_ia():
         if not sintoma:
             return jsonify({"detail": "Por favor, ingresa un síntoma."}), 400
 
-        # Utilizamos el modelo actualizado exigido por la API
+        
         modelo = genai.GenerativeModel('gemini-3.8-flash')
         prompt = f"Actúa como un farmacéutico profesional y amable de El Salvador. Un paciente te dice que tiene este síntoma: '{sintoma}'. En un solo párrafo corto de 2 a 3 líneas, recomiéndale qué categoría de medicamentos de venta libre buscar en la farmacia (ej. analgésicos, antigripales) y recuérdale brevemente que consulte a un médico."
 
@@ -46,9 +40,7 @@ def asistente_ia():
     except Exception as e:
         return jsonify({"detail": str(e)}), 500
 
-# ==========================================
-# 3. RUTAS DE INVENTARIO Y VENTAS
-# ==========================================
+
 @app.route("/api/medicamentos/buscar/<codigo>", methods=["GET"])
 def buscar_medicamento(codigo):
     db = SessionLocal()
