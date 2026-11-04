@@ -1,6 +1,6 @@
 # Farmacia San Benito - Backend y Asistente IA
 
-Sistema web completo desarrollado SQLAlchemy y Antigravity IDE.
+Sistema web completo desarrollado con SQLAlchemy y Antigravity IDE.
 
 ## Instrucciones de ejecucion: 
 1. Activar entorno virtual: .\venv\Scripts\activate
