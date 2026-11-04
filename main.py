@@ -3,21 +3,24 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from sqlalchemy import func
 import google.generativeai as genai
-
+from dotenv import load_dotenv
 
 from database import SessionLocal, Medicamento, Lote, Venta, DetalleVenta
 
-app = Flask(__name__)
+# Cargar automáticamente las variables de entorno desde el archivo .env
+load_dotenv()
 
+app = Flask(__name__)
 CORS(app)
 
-
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Configurar la API key de Google Gemini desde las variables de entorno
+api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
 
 
 @app.route("/", methods=["GET"])
 def inicio():
-   
     ruta_html = os.path.join(os.path.dirname(__file__), "..", "frontend_web", "index.html")
     return send_file(ruta_html)
 
@@ -25,20 +28,40 @@ def inicio():
 @app.route("/api/ia/consultar", methods=["POST"])
 def asistente_ia():
     try:
-        req = request.json
+        req = request.json or {}
         sintoma = req.get("sintoma")
 
         if not sintoma:
             return jsonify({"detail": "Por favor, ingresa un síntoma."}), 400
 
-        
+        # Verificar si la API Key está configurada
+        if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+            return jsonify({
+                "respuesta": "El servicio de IA está temporalmente no disponible (API Key no configurada). "
+                             "Consulte a un médico o farmacéutico en caja."
+            })
+
         modelo = genai.GenerativeModel('gemini-3.8-flash')
-        prompt = f"Actúa como un farmacéutico profesional y amable de El Salvador. Un paciente te dice que tiene este síntoma: '{sintoma}'. En un solo párrafo corto de 2 a 3 líneas, recomiéndale qué categoría de medicamentos de venta libre buscar en la farmacia (ej. analgésicos, antigripales) y recuérdale brevemente que consulte a un médico."
+        prompt = (
+            f"Actúa como un farmacéutico profesional y amable de El Salvador. "
+            f"Un paciente te dice que tiene este síntoma: '{sintoma}'. "
+            f"En un solo párrafo corto de 2 a 3 líneas, recomiéndale qué categoría de medicamentos de venta libre "
+            f"buscar en la farmacia (ej. analgésicos, antigripales) y recuérdale brevemente que consulte a un médico."
+        )
 
         respuesta = modelo.generate_content(prompt)
         return jsonify({"respuesta": respuesta.text})
+
     except Exception as e:
-        return jsonify({"detail": str(e)}), 500
+        error_str = str(e)
+        # Si se agota la cuota gratuita (Error 429), se devuelve una respuesta de respaldo limpia
+        if "429" in error_str or "Quota exceeded" in error_str:
+            return jsonify({
+                "respuesta": "Estimado cliente, el asistente ha alcanzado su límite de consultas por hoy. "
+                             "Para su síntoma, le recomendamos consultar en caja por analgésicos de venta libre "
+                             "o acudir a su médico de confianza."
+            })
+        return jsonify({"detail": error_str}), 500
 
 
 @app.route("/api/medicamentos/buscar/<codigo>", methods=["GET"])
@@ -63,6 +86,7 @@ def buscar_medicamento(codigo):
     finally:
         db.close()
 
+
 @app.route("/api/catalogo", methods=["GET"])
 def obtener_catalogo():
     db = SessionLocal()
@@ -81,6 +105,7 @@ def obtener_catalogo():
         return jsonify(catalogo)
     finally:
         db.close()
+
 
 @app.route("/api/medicamentos/crear", methods=["POST"])
 def crear_medicamento():
@@ -113,6 +138,7 @@ def crear_medicamento():
     finally:
         db.close()
 
+
 @app.route("/api/ventas/procesar", methods=["POST"])
 def procesar_venta():
     db = SessionLocal()
@@ -143,7 +169,8 @@ def procesar_venta():
         db.flush()
 
         for lote in lotes_disponibles:
-            if cantidad_restante <= 0: break
+            if cantidad_restante <= 0:
+                break
             if lote.stock >= cantidad_restante:
                 descuento = cantidad_restante
                 lote.stock -= cantidad_restante
@@ -172,6 +199,7 @@ def procesar_venta():
         return jsonify({"detail": str(e)}), 500
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8000, debug=True)
